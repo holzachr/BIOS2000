@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zutaten</title>
+    <style>
+        /* Lighter colors for better readability */
+        #p1 { background-color: lightgreen; }
+        #p2 { background-color: lightblue; }
+        #p3 { background-color: lightcoral; }
+        #p4 { background-color: yellow; }
+        #p5 { background-color: plum; }
+        #p6 { background-color: pink; }
+    </style>
+    <script>
+        function loadIngredients() {
+            fetch("/getIngredients")
+                .then(response => response.json())
+                .then(data => {
+                    const pumpCount = data.pump_count;
+                    const container = document.getElementById("pump-container");
+                    container.innerHTML = ""; // Bestehenden Inhalt loeschen
+
+                    for (let i = 1; i <= pumpCount; i++) {
+                        const label = document.createElement("label");
+                        label.innerHTML = `Pumpe ${i}: <input type="text" id="p${i}" name="p${i}" value="${data.pumps[i]}"><br>`;                        
+                        container.appendChild(label);
+                    }
+                })
+                .catch(error => console.error("Fehler beim Laden der Konfiguration:", error));
+        }
+		
+		
+        function saveIngredients(event) {
+            event.preventDefault(); // Verhindert das Neuladen der Seite
+
+            let params = new URLSearchParams();
+            for (let i = 1; i <= document.getElementById("pump-container").children.length; i++) {
+                let input = document.getElementById("p" + i);
+                if (input) {
+                    params.append("p" + i, input.value);
+                }
+            }
+
+            fetch("/saveIngredients?" + params.toString(), { method: "GET" })
+                .then(response => response.text())
+                .then(data => {
+                    let msgBox = document.getElementById("message");
+                    msgBox.innerText = "Speichern erfolgreich!";
+                    msgBox.style.color = "green";
+                    msgBox.style.display = "block";
+                    setTimeout(() => { msgBox.style.display = "none"; }, 3000); // Blendet die Nachricht nach 3 Sek. aus
+                })
+                .catch(error => {
+                    console.error("Fehler beim Speichern:", error);
+                    let msgBox = document.getElementById("message");
+                    msgBox.innerText = "Fehler beim Speichern!";
+                    msgBox.style.color = "red";
+                    msgBox.style.display = "block";
+                });
+        }
+
+        window.onload = loadIngredients;
+    </script>
+</head>
+<body>
+    <h2>Flaschenzuordnung</h2>
+	<form id="config-form" onsubmit="saveIngredients(event)">
+        <div id="pump-container"></div>
+		<br>
+        <button type="submit">Speichern</button>
+    </form>
+    <p id="message" style="display:none; font-weight: bold;"></p>
+	<br>
+	<img src="positions.png" alt="Pumpen-Positionen">
+</body>
+</html>

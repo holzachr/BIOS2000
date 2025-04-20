@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Datei-Upload</title>
+</head>
+<body>
+  <h2>Datei hochladen</h2>
+  <form method="POST" action="/uploadFile" enctype="multipart/form-data">
+    <input type="file" name="upload">
+    <input type="submit" value="Hochladen">
+  </form>
+
+  <hr>
+  <a href="/listFiles">Dateiliste anzeigen</a>
+</body>
+</html>

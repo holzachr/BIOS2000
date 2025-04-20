@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shots</title>
+    <style>
+        .pump-label-1 { background-color: lightgreen; }
+        .pump-label-2 { background-color: lightblue; }
+        .pump-label-3 { background-color: lightcoral; }
+        .pump-label-4 { background-color: yellow; }
+        .pump-label-5 { background-color: plum; }
+        .pump-label-6 { background-color: pink; }
+    </style>
+<script>
+    let pumpCount = 0;
+    let currentPumpConfig = {}; // Speichert aktuelle Pumpenzuordnung
+    let socket = new WebSocket("ws://" + window.location.hostname + "/ws");
+
+    socket.onmessage = function(event) {
+        if (event.data === "update") {
+            console.log("Zutaten wurden geändert! Aktualisiere...");
+            location.reload();  // 🔥 Aktualisiert die Seite automatisch!
+        }
+    };
+
+    socket.onopen = function() {
+        console.log("WebSocket verbunden!");
+    };
+
+    socket.onclose = function() {
+        console.log("WebSocket getrennt! Versuche, erneut zu verbinden...");
+        setTimeout(() => location.reload(), 5000); // Falls WebSocket stirbt, nach 5 Sek. reload
+    };
+
+    function loadIngredients() {
+        fetch("/getIngredients")
+            .then(response => response.json())
+            .then(data => {
+                pumpCount = data.pump_count;
+                currentPumpConfig = data.pumps;
+                renderShots();
+            })
+            .catch(error => console.error("Fehler beim Laden der Konfiguration:", error));
+    }
+
+    function renderShots() {
+        const container = document.getElementById("pump-container");
+        container.innerHTML = "";
+    
+        for (let i = 1; i <= pumpCount; i++) {
+            const div = document.createElement("div");
+            div.style.display = "flex";
+            div.style.alignItems = "center";
+            div.style.marginBottom = "10px";
+    
+            div.innerHTML = `
+                <button onclick="mixShot(${i}, 20)" style="margin-right: 10px;">Shot 2 cl</button>      
+                <button onclick="mixShot(${i}, 40)" style="margin-right: 10px;">Shot 4 cl</button>
+                <label class="pump-label-${i}">${currentPumpConfig[i]} <span id="p${i}_val"></span></label>
+            `;
+    
+            container.appendChild(div);
+        }
+    }
+  
+    function mixShot(sliderIndex, amount) {
+        let recipeData = [];
+
+        recipeData.push({ pump: sliderIndex, amount: amount }); // Pumpe und Menge speichern
+
+        // Sende die Rezeptdaten an den ESP8266
+        fetch('/mixCocktail', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(recipeData) // JSON senden
+            })
+            .then(response => response.json())
+            .then(data => console.log('Cocktail mixen erfolgreich:', data))
+            .catch(error => console.error('Fehler beim Mixen:', error));
+    }
+    
+    function stop() {
+        fetch("/stop", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: ""
+        });
+    }
+
+    window.onload = function() {
+        loadIngredients();
+    };
+</script>
+
+
+</head>
+<body>
+    <h2>What do you want to drink today?</h2>
+
+    <div id="pump-container"></div>
+
+    <button onclick="stop()">STOP!</button>
+</body>
+</html>

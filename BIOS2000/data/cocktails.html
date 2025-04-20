@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cocktails</title>
+    <style>
+        .color-1 { background: lightgreen; }
+        .color-2 { background: lightblue; }
+        .color-3 { background: lightcoral; }
+        .color-4 { background: yellow; }
+        .color-5 { background: plum; }
+        .color-6 { background: pink; }
+		.pump-label-1 { background-color: lightgreen; }
+        .pump-label-2 { background-color: lightblue; }
+        .pump-label-3 { background-color: lightcoral; }
+        .pump-label-4 { background-color: yellow; }
+        .pump-label-5 { background-color: plum; }
+        .pump-label-6 { background-color: pink; }
+    </style>
+<script>
+    let pumpCount = 0;
+    let maxVolume = 300;
+    let recipes = {};
+    let currentPumpConfig = {}; // Speichert aktuelle Pumpenzuordnung
+	let socket = new WebSocket("ws://" + window.location.hostname + "/ws");
+
+    socket.onmessage = function(event) {
+        if (event.data === "update") {
+            console.log("Zutaten wurden geändert! Aktualisiere...");
+            location.reload();  // 🔥 Aktualisiert die Seite automatisch!
+        }
+    };
+
+    socket.onopen = function() {
+        console.log("WebSocket verbunden!");
+    };
+
+    socket.onclose = function() {
+        console.log("WebSocket getrennt! Versuche, erneut zu verbinden...");
+        setTimeout(() => location.reload(), 5000); // Falls WebSocket stirbt, nach 5 Sek. reload
+    };
+
+    function loadIngredients() {
+        fetch("/getIngredients")
+            .then(response => response.json())
+            .then(data => {
+                pumpCount = data.pump_count;
+                currentPumpConfig = data.pumps;
+                renderSliders();
+                updateMaxVolume();  // WICHTIG: Aktualisiert die Slider-Beschränkungen basierend auf der Glasgröße
+            })
+            .catch(error => console.error("Fehler beim Laden der Konfiguration:", error));
+    }
+
+    function renderSliders() {
+        const container = document.getElementById("pump-container");
+        container.innerHTML = "";
+    
+        for (let i = 1; i <= pumpCount; i++) {
+            const div = document.createElement("div");
+            div.style.display = "flex";
+            div.style.alignItems = "center";
+            div.style.marginBottom = "10px";
+    
+            div.innerHTML = `
+                <button onclick="mixShot(${i})" style="margin-right: 10px;">Shot!</button>
+                <button onclick="resetSlider(${i})" style="margin-right: 5px;">0</button>
+                <button onclick="setAmount(${i}, 20)" style="margin-right: 10px;">2 cl</button>
+				<button onclick="setAmount(${i}, 40)" style="margin-right: 10px;">4 cl</button>
+                <input type="range" id="p${i}" class="color-${i}" min="0" max="${maxVolume}" value="0" step="2"
+                    oninput="handleSliderChange(${i})" style="margin-right: 10px;">                
+                <label class="pump-label-${i}">${currentPumpConfig[i]}: <span id="p${i}_val">0 ml</span></label>                
+            `;
+    
+            container.appendChild(div);
+        }
+    }
+    
+    function resetSlider(sliderIndex) {
+        let slider = document.getElementById("p" + sliderIndex);
+        slider.value = 0;
+        document.getElementById("p" + sliderIndex + "_val").innerText = "0 ml";
+        updateTotal();
+    }
+    
+    function setAmount(sliderIndex, amount) {
+        let slider = document.getElementById("p" + sliderIndex);
+        slider.value = amount;
+        document.getElementById("p" + sliderIndex + "_val").innerText = amount + " ml";
+        updateTotal();
+    }
+
+    function handleSliderChange(sliderIndex) {
+        let slider = document.getElementById("p" + sliderIndex);
+        let value = parseInt(slider.value);
+
+        // Wenn ein Schieberegler auf das Maximum gezogen wird, setze alle anderen auf 0
+        if (value == maxVolume) {
+            resetOtherSliders(sliderIndex);
+        }
+
+        updateTotal();
+    }
+
+    function resetOtherSliders(exceptIndex) {
+        for (let i = 1; i <= pumpCount; i++) {
+            if (i !== exceptIndex) {
+                let slider = document.getElementById("p" + i);
+                slider.value = 0;
+                document.getElementById("p" + i + "_val").innerText = "0 ml";
+            }
+        }
+    }
+
+    function updateTotal() {
+        let total = 0;
+        let sliders = [];
+    
+        for (let i = 1; i <= pumpCount; i++) {
+            let slider = document.getElementById("p" + i);
+            let value = parseInt(slider.value);
+            sliders.push({ index: i, value: value });
+			document.getElementById("p" + i + "_val").innerText = value + " ml";
+            total += value;
+        }
+    
+        // Falls die Gesamtmenge zu hoch ist, direkt hier korrigieren (ohne rekursiven Funktionsaufruf)
+        if (total > maxVolume) {
+            let excess = total - maxVolume;  
+            let adjustableSliders = sliders.filter(s => s.value > 0);  
+    
+            if (adjustableSliders.length > 0) {
+                let reductionStep = Math.ceil(excess / adjustableSliders.length);
+    
+                adjustableSliders.forEach(sliderData => {
+                    let slider = document.getElementById("p" + sliderData.index);
+                    let newValue = Math.max(0, sliderData.value - reductionStep);
+                    slider.value = newValue;
+                    document.getElementById("p" + sliderData.index + "_val").innerText = newValue + " ml";
+                });
+            }
+        }
+    
+        // Aktualisiere die Gesamtmenge nach der Anpassung
+        total = sliders.reduce((sum, s) => sum + parseInt(document.getElementById("p" + s.index).value), 0);
+        document.getElementById("total-amount").innerText = `Gesamt: ${total} ml`;
+    }
+
+    function updateMaxVolume() {
+        maxVolume = parseInt(document.getElementById("glass-size").value) || 300;
+        document.getElementById("glass-size").value = maxVolume;
+    
+        for (let i = 1; i <= pumpCount; i++) {
+            let slider = document.getElementById("p" + i);
+            slider.max = maxVolume;  // Maximalwert der Schieberegler anpassen
+            if (parseInt(slider.value) > maxVolume) {
+                slider.value = maxVolume;  // Falls der aktuelle Wert größer als maxVolume ist, anpassen
+                document.getElementById("p" + i + "_val").innerText = maxVolume + " ml";
+            }
+        }
+        updateTotal(); // Aktualisiert die Gesamtmenge
+    }
+
+    function saveRecipe() {
+        let name = prompt("Rezeptname eingeben:");
+        if (!name) return;
+
+        let recipe = {
+            glassSize: maxVolume,
+            ingredients: {},
+            pumpConfig: { ...currentPumpConfig }
+        };
+
+        for (let i = 1; i <= pumpCount; i++) {
+            recipe.ingredients[i] = parseInt(document.getElementById("p" + i).value);
+        }
+
+        recipes[name] = recipe;
+        updateRecipeList();
+        saveRecipesToServer();
+    }
+
+    function loadRecipe() {
+        let name = document.getElementById("recipe-list").value;
+        if (!recipes[name]) return;
+
+        let recipe = recipes[name];
+        let scaleFactor = maxVolume / recipe.glassSize;
+
+        let hasMismatch = false;
+        for (let i = 1; i <= pumpCount; i++) {
+            if (recipe.pumpConfig[i] !== currentPumpConfig[i]) {
+                hasMismatch = true;
+            }
+        }
+
+        if (hasMismatch) {
+            let choice = confirm(`Warnung: Die Pumpenkonfiguration hat sich geändert!\n\nMöchtest du das Rezept trotzdem laden?`);
+            if (!choice) return;
+        }
+
+        for (let i = 1; i <= pumpCount; i++) {
+            let newValue = Math.round((recipe.ingredients[i] || 0) * scaleFactor / 2) * 2;
+            document.getElementById("p" + i).value = newValue;
+            document.getElementById("p" + i + "_val").innerText = newValue + " ml";
+        }
+        updateTotal();
+    }
+
+    function deleteRecipe() {
+        let name = document.getElementById("recipe-list").value;
+        if (!name) return;
+
+        let confirmDelete = confirm(`Möchtest du das Rezept '${name}' wirklich löschen?`);
+        if (!confirmDelete) return;
+
+        delete recipes[name];
+        updateRecipeList();
+        saveRecipesToServer();
+    }
+
+    function renameRecipe() {
+        let oldName = document.getElementById("recipe-list").value;
+        if (!oldName) return;
+
+        let newName = prompt(`Neuer Name für '${oldName}':`);
+        if (!newName || recipes[newName]) return;
+
+        recipes[newName] = { ...recipes[oldName] };
+        delete recipes[oldName];
+
+        updateRecipeList();
+        saveRecipesToServer();
+    }
+
+    function updateRecipeList() {
+        let select = document.getElementById("recipe-list");
+        select.innerHTML = "";
+        for (let name in recipes) {
+            let option = document.createElement("option");
+            option.value = name;
+            option.innerText = name;
+            select.appendChild(option);
+        }
+    }
+
+    function saveRecipesToServer() {
+        fetch("/saveRecipe", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: "data=" + encodeURIComponent(JSON.stringify(recipes))
+        });
+    }
+
+    function loadRecipes() {
+        fetch("/getRecipes")
+            .then(response => response.json())
+            .then(data => {
+                recipes = data;
+                updateRecipeList();
+            })
+            .catch(error => console.error("Fehler beim Laden der Rezepte:", error));
+    }
+
+    function mixCocktail() {
+        let recipeData = [];
+
+        for (let i = 1; i <= pumpCount; i++) {
+            let amount = parseInt(document.getElementById("p" + i).value); // Menge der Pumpe
+            if (amount > 0) {
+                recipeData.push({ pump: i, amount: amount }); // Pumpe und Menge speichern
+            }
+        }
+
+        // Sende die Rezeptdaten an den ESP8266
+        fetch('/mixCocktail', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(recipeData) // JSON senden
+            })
+            .then(response => response.json())
+            .then(data => console.log('Cocktail mixen erfolgreich:', data))
+            .catch(error => console.error('Fehler beim Mixen:', error));
+    }
+    
+    function mixShot(sliderIndex) {
+        let recipeData = [];
+
+        recipeData.push({ pump: sliderIndex, amount: 20 }); // Pumpe und Menge speichern
+
+        // Sende die Rezeptdaten an den ESP8266
+        fetch('/mixCocktail', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(recipeData) // JSON senden
+            })
+            .then(response => response.json())
+            .then(data => console.log('Cocktail mixen erfolgreich:', data))
+            .catch(error => console.error('Fehler beim Mixen:', error));
+    }
+    
+    function stop() {
+        fetch("/stop", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: ""
+        });
+    }
+
+    window.onload = function() {
+        loadIngredients();
+        loadRecipes();
+    };
+	
+    window.onerror = function(message, source, lineno, colno, error) {
+        document.body.innerHTML += `<p style="color:red;">Fehler: ${message} in ${source} (Zeile ${lineno}, Spalte ${colno})</p>`;
+    };
+</script>
+
+
+</head>
+<body>
+    <h2>What do you want to drink today?</h2>
+
+    <label>Glasgröße (ml):
+        <input type="number" id="glass-size" value="300" min="20" max="500" step="10" oninput="updateMaxVolume()">
+    </label><br><br>
+
+    <div id="pump-container"></div>
+
+    <h3 id="total-amount">Gesamt: 0 ml</h3>
+    <button onclick="mixCocktail()">Cocktail mixen</button>
+    <button onclick="stop()">STOP!</button>
+    <br>
+    <br>
+    <button onclick="saveRecipe()">Speichern</button>
+    <button onclick="deleteRecipe()">Löschen</button>
+    <button onclick="renameRecipe()">Umbenennen</button>
+
+    <h3>Gespeicherte Rezepte:</h3>
+    <select id="recipe-list"></select>
+    <button onclick="loadRecipe()">Laden</button>
+</body>
+</html>

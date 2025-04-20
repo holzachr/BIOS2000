@@ -1,0 +1,10 @@
+- Drill 0.9 mm hole through back to cut trace (under chip) between pin 1 (I2C enable) and GND
+- Solder pin 1 to pin 2 (VCC) to enable I2C
+- Cut trace between pin 32 (EA) and VCC
+- Solder pin 32 (EA) to GND (at capacitor C1 or C2) to set I2C addressing to 0b0101 + ADR_2 + ADR_1 + ADR_0
+- Solder pins 26 to 30 (ADR_5 to ADR_0) to GND (at capacitor C1 or C2) to set I2C address to 0b0101 + 0b0000 = 0x28
+- RST pin has pull-up resistor on board already, nothing to do here
+- Pins SDA and MISO carry I2C signals SDA and SCL, device address is 0x28 now.
+
+Helpful:
+https://forum.arduino.cc/t/rc522-rfid-rc522-switching-spi-to-uart-interface-or-i2c-possible/425741/3

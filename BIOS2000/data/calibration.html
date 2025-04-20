@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalibrierung</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
+        table { width: 60%; margin: auto; border-collapse: collapse; }
+        th, td { border: 1px solid black; padding: 10px; }
+        input { width: 80px; text-align: center; }
+    </style>
+</head>
+<body>
+    <h2>Kalibrierwerte der Pumpen</h2>
+    <table>
+        <tr>
+            <th>Pumpe</th>
+            <th>Aktueller Kalibrierwert (ml/s)</th>
+            <th>Angefordert (ml)</th>
+            <th>Tatsächlich erhalten (ml)</th>
+            <th>Neuer Kalibrierwert (ml/s)</th>
+        </tr>
+        <tbody id="pumpTable"></tbody>
+    </table>
+
+    <script>
+        function calculateNewRate(index) {
+            let currentRate = parseFloat(document.getElementById(`rate_${index}`).value);
+            let requested = parseFloat(document.getElementById(`requested_${index}`).value);
+            let received = parseFloat(document.getElementById(`received_${index}`).value);
+            let newRateField = document.getElementById(`new_rate_${index}`);
+
+            if (!isNaN(currentRate) && !isNaN(requested) && !isNaN(received) && received > 0) {
+                let newRate = (currentRate * received) / requested;
+                newRateField.value = newRate.toFixed(4);
+            } else {
+                newRateField.value = "";
+            }
+        }
+
+        fetch('/getCalibration')
+            .then(response => response.json())
+            .then(data => {
+                let table = document.getElementById("pumpTable");
+                data.forEach((value, index) => {
+                    let row = document.createElement("tr");
+                    row.innerHTML = `
+                        <td>${index + 1}</td>
+                        <td><input type="text" id="rate_${index}" value="${value}" readonly></td>
+                        <td><input type="number" id="requested_${index}" value="300" step="1" oninput="calculateNewRate(${index})"></td>
+                        <td><input type="number" id="received_${index}" step="1" oninput="calculateNewRate(${index})"></td>
+                        <td><input type="text" id="new_rate_${index}" readonly></td>
+                    `;
+                    table.appendChild(row);
+                });
+            })
+            .catch(error => console.error("Fehler beim Abrufen der Daten:", error));
+    </script>
+</body>
+</html>
